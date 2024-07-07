@@ -10,7 +10,7 @@ currentPos = np.zeros(nInst)
 cache = defaultdict(None)
 
 # Config
-threshold = 1   # minimum $1 profit
+threshold = 0.10   # minimum $0.10 profit
 
 def apply_arima(prices, stock_name):
     """

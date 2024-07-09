@@ -7,55 +7,55 @@ from collections import defaultdict
 # Setup
 nInst = 50
 currentPos = np.zeros(nInst)
-cache = defaultdict(None)
+lastPrice = np.zeros(nInst)
+model_cache = defaultdict(None)
 
 # Config
-threshold = 0.10   # minimum $0.10 profit
+threshold = 0.10    # minimum $0.10 profit
+forecast_window = 20     # forecast 20 days into the future
+stop_loss = 0.
 
-def apply_arima(prices, stock_name):
-    """
-    Apply ARIMA model to predict stock prices.
+def arima_train(train_prices: pd.Series, stock_name: str) -> None:
+    kpss_diffs = ndiffs(train_prices, alpha=0.05, test='kpss', max_d=20)
+    adf_diffs = ndiffs(train_prices, alpha=0.05, test='adf', max_d=20)
+    n_diffs = max(adf_diffs, kpss_diffs)
 
-    Parameters:
-    - prices: Series, input stock data
+    model = auto_arima(train_prices, d=n_diffs, seasonal=True, stepwise=True,
+                        suppress_warnings=True, error_action='ignore',
+                        max_p=10, max_q=10,
+                        max_order=None, trace=True)
+    model_cache[stock_name] = model
 
-    Returns:
-    - prediction: int, ARIMA-predicted stock price
-    """
-    if stock_name in cache:
-        model = cache[stock_name]
-        model.update(prices.iloc[-1])
-    else:
-        kpss_diffs = ndiffs(prices, alpha=0.05, test='kpss', max_d=20)
-        adf_diffs = ndiffs(prices, alpha=0.05, test='adf', max_d=20)
-        n_diffs = max(adf_diffs, kpss_diffs)
+def arima_update(observations: pd.Series, stock_name: str) -> None:
+    model_cache[stock_name].update(observations)
 
-        model = auto_arima(prices, d=n_diffs, seasonal=True, stepwise=True,
-                            suppress_warnings=True, error_action='ignore',
-                            max_p=10, max_q=10,
-                            max_order=None, trace=True)
-        cache[stock_name] = model
-
-    fc, conf_int = model.predict(n_periods=1, return_conf_int=True)
-
-    return fc.tolist()[0], np.asarray(conf_int).tolist()[0]
+def arima_forecast(stock_name, window=10) -> None | tuple[np.array, np.array]:
+    return model_cache[stock_name].predict(n_periods=window).tolist()[-1]
 
 def getMyPosition(prcSoFar):
-    global currentPos
-
     prcSoFar = pd.DataFrame(prcSoFar.T)
-    (nins, nt) = prcSoFar.shape
+    (nt, _) = prcSoFar.shape
     if (nt < 2):
-        return np.zeros(nins)
+        return currentPos
+
+    if nt % forecast_window != 0:
+        return currentPos
 
     # Apply ARIMA predictions
     for i, (stock_name, prices) in enumerate(prcSoFar.items()):
-        price_prediction, _ = apply_arima(prices, stock_name)
-        last_price = prices.iloc[-1]
+        # Create ARIMA model if not exists, otherwise update with last window observations
+        if stock_name not in model_cache:
+            arima_train(prices, stock_name)
+        else:
+            arima_update(prices.iloc[-forecast_window:], stock_name)
 
-        predicted_profit = price_prediction - last_price
+        # Get the latest price, and predict window periods into the future
+        lastPrice[i] = prices.iloc[-1]
+        price_forecast = arima_forecast(stock_name, window=forecast_window)
 
+        # Only trade if predicted profit surpasses threshold
+        predicted_profit = price_forecast - lastPrice[i]
         if np.abs(predicted_profit) >= threshold:
-            currentPos[i] = np.sign(predicted_profit)
+            currentPos[i] = np.sign(predicted_profit) * 300
 
     return currentPos

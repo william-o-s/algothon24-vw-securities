@@ -1,14 +1,11 @@
-#!/usr/bin/env python
-
 import numpy as np
 import pandas as pd
-from main import getMyPosition as getPosition
+from mean_reversion_tuning import getMyPosition as getPosition
 
 nInst = 0
 nt = 0
 commRate = 0.0010
 dlrPosLimit = 10000
-
 
 def loadPrices(fn):
     global nt, nInst
@@ -16,24 +13,20 @@ def loadPrices(fn):
     (nt, nInst) = df.shape
     return (df.values).T
 
-
 pricesFile = "./prices.txt"
 prcAll = loadPrices(pricesFile)
 print("Loaded %d instruments for %d days" % (nInst, nt))
 
-
-def calcPL(prcHist):
+def calcPL(prcHist, n1, base_offset):
     cash = 0
     curPos = np.zeros(nInst)
     totDVolume = 0
-    totDVolumeSignal = 0
-    totDVolumeRandom = 0
     value = 0
     todayPLL = []
     (_, nt) = prcHist.shape
-    for t in range(250, 500):   # can change to 500 to reflect current
+    for t in range(500, 750):
         prcHistSoFar = prcHist[:, :t]
-        newPosOrig = getPosition(prcHistSoFar)
+        newPosOrig = getPosition(prcHistSoFar, n1, base_offset)
         curPrices = prcHistSoFar[:, -1]
         posLimits = np.array([int(x) for x in dlrPosLimit / curPrices])
         newPos = np.clip(newPosOrig, -posLimits, posLimits)
@@ -48,25 +41,28 @@ def calcPL(prcHist):
         todayPL = cash + posValue - value
         todayPLL.append(todayPL)
         value = cash + posValue
-        ret = 0.0
-        if (totDVolume > 0):
-            ret = value / totDVolume
-        print("Day %d value: %.2lf todayPL: $%.2lf $-traded: %.0lf return: %.5lf" %
-              (t, value, todayPL, totDVolume, ret))
     pll = np.array(todayPLL)
     (plmu, plstd) = (np.mean(pll), np.std(pll))
     annSharpe = 0.0
     if (plstd > 0):
         annSharpe = np.sqrt(250) * plmu / plstd
-    return (plmu, ret, plstd, annSharpe, totDVolume)
+    return (plmu, plstd, annSharpe, totDVolume)
 
+def tune_parameters(prcAll):
+    best_score = -np.inf
+    best_params = {}
+    for n1 in range(20, 51, 10):  # Testing different window sizes from 20 to 50
+        for base_offset in np.arange(0.005, 0.021, 0.005):  # Testing offsets from 0.005 to 0.02
+            meanpl, plstd, sharpe, dvol = calcPL(prcAll, n1, base_offset)
+            score = meanpl - 0.1 * plstd
+            print(f"n1: {n1}, base_offset: {base_offset}, Score: {score}")
+            if score > best_score:
+                best_score = score
+                best_params = {'n1': n1, 'base_offset': base_offset, 'score': score}
+    return best_params
 
-(meanpl, ret, plstd, sharpe, dvol) = calcPL(prcAll)
-score = meanpl - 0.1*plstd
-print("=====")
-print("mean(PL): %.1lf" % meanpl)
-print("return: %.5lf" % ret)
-print("StdDev(PL): %.2lf" % plstd)
-print("annSharpe(PL): %.2lf " % sharpe)
-print("totDvolume: %.0lf " % dvol)
-print("Score: %.2lf" % score)
+best_params = tune_parameters(prcAll)
+print("Best Parameters:")
+print("n1: ", best_params['n1'])
+print("base_offset: ", best_params['base_offset'])
+print("Best Score: ", best_params['score'])

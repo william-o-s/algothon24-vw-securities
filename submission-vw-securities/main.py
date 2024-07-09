@@ -15,6 +15,7 @@ def EMA(prices, window):
 def getMyPosition(prices):
     nInst, nt = prices.shape
     positions = np.zeros(nInst)
+    
 
     if nt >= 30:  # Make sure there is enough data
         ema_short = EMA(prices, 5)[:, -1]  # Last value of the short-term EMA

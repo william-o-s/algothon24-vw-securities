@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
+import statsmodels.api as sm
 
 from collections import defaultdict
-from sklearn.linear_model import LinearRegression
 
 nInst = 50
 currentPos = np.zeros(nInst)
@@ -10,30 +10,33 @@ currentPos = np.zeros(nInst)
 model_cache = defaultdict(None)
 
 def train_mlr_model(df: pd.DataFrame, stock: int):
-    X_train = df.loc[:, df.columns != stock]
-    Y_train = df[stock]
+    # MLR model -> y_{t+1} = x_t * beta + e
+    # Uses previous values of all 50 stocks to predict next day's price
 
-    # build model
-    model_cache[stock] = LinearRegression(fit_intercept=False).fit(X_train, Y_train)
+    Y_train = df[stock].shift(-1).dropna()
+
+    X_train = df.iloc[:-1, df.columns]
+    X_train = sm.add_constant(X_train)
+
+    model_cache[stock] = sm.OLS(endog=Y_train, exog=X_train).fit()
 
 def predict(df: pd.DataFrame, stock: int):
-    stock_model = model_cache[stock]
-    features = df.iloc[-1, df.columns != stock]
-    features = pd.DataFrame([features.tolist()], columns=features.index)
+    current_prices = df.iloc[-1]
+    current_prices = sm.add_constant([current_prices], has_constant='add')
 
-    return stock_model.predict(features)
+    stock_model = model_cache[stock]
+    return stock_model.predict(exog=current_prices)
 
 def getMyPosition(prcSoFar):
     data = pd.DataFrame(prcSoFar.T)
     (nt, nInst) = prcSoFar.shape
 
-    if not model_cache:
-        for stock in data.columns:
+    for stock in data.columns:
+        if stock not in model_cache:
             train_mlr_model(data, stock)
 
-    for stock in data.columns:
         latest_price = data.iloc[-1, stock]
         predicted_price = predict(data, stock)
-        currentPos[stock] = np.sign(predicted_price - latest_price)
+        currentPos[stock] = np.sign(predicted_price - latest_price) * int(10_000 / latest_price) * 0.2
 
     return currentPos

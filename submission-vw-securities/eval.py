@@ -32,12 +32,16 @@ def calcPL(prcHist):
     value = 0
     todayPLL = []
     zscores = []
+    lower_bands = []
+    upper_bands = []
     (_, nt) = prcHist.shape
     for t in range(500, 751):   # can change to 500 to reflect current
         prcHistSoFar = prcHist[:, :t]
-        newPosOrig, zscore = getPosition(prcHistSoFar)
+        newPosOrig, zscore, lower_band, upper_band = getPosition(prcHistSoFar)
 
         zscores.append(zscore)
+        lower_bands.append(lower_band)
+        upper_bands.append(upper_band)
 
         curPrices = prcHistSoFar[:, -1]
         posLimits = np.array([int(x) for x in dlrPosLimit / curPrices])
@@ -64,10 +68,10 @@ def calcPL(prcHist):
     annSharpe = 0.0
     if (plstd > 0):
         annSharpe = np.sqrt(250) * plmu / plstd
-    return (pll, zscores, plmu, ret, plstd, annSharpe, totDVolume)
+    return (pll, zscores, lower_bands, upper_bands, plmu, ret, plstd, annSharpe, totDVolume)
 
 
-(pll, zscores, meanpl, ret, plstd, sharpe, dvol) = calcPL(prcAll)
+(pll, zscores, lower_bands, upper_bands, meanpl, ret, plstd, sharpe, dvol) = calcPL(prcAll)
 score = meanpl - 0.1*plstd
 print("=====")
 print("mean(PL): %.1lf" % meanpl)
@@ -77,17 +81,24 @@ print("annSharpe(PL): %.2lf " % sharpe)
 print("totDvolume: %.0lf " % dvol)
 print("Score: %.2lf" % score)
 
+window = 250
+
+pll = pll[:window]
+zscores = zscores[:window]
+lower_bands = lower_bands[:window]
+upper_bands = upper_bands[:window]
+
 # Plot pll
 fig, ax1 = plt.subplots(figsize=(20,5))
 ax1.plot(pll, label='$')
 ax1.axhline(meanpl, color='black', label='P&L mean')
 ax2 = ax1.twinx()
 ax2.plot(zscores, label='Z', color='red')
-ax2.axhline(1, color='red', linestyle='--')
-ax2.axhline(0.75, color='green', linestyle=':')
-plt.title('Strategy P&L')
+ax2.plot(lower_bands, label='Lower Bollinger', color='orange', linestyle='--')
+ax2.plot(upper_bands, label='Upper Bollinger', color='violet', linestyle='--')
+plt.title('Daily P&L')
 plt.legend(fancybox=True, framealpha=0.5)
-plt.savefig('strategy.png')
+plt.savefig('daily pll.png')
 plt.close(fig)
 
 # Plot cumulative pll
@@ -95,9 +106,9 @@ fig, ax1 = plt.subplots(figsize=(20,5))
 ax1.plot(np.cumsum(pll))
 ax2 = ax1.twinx()
 ax2.plot(zscores, label='Z', color='red')
-ax2.axhline(1, color='red', linestyle='--')
-ax2.axhline(0.75, color='green', linestyle=':')
+ax2.plot(lower_bands, label='Lower Bollinger', color='orange', linestyle='--')
+ax2.plot(upper_bands, label='Upper Bollinger', color='violet', linestyle='--')
 plt.ylabel('$')
 plt.title('Cumulative P&L')
-plt.savefig('cumulative.png')
+plt.savefig('cumulative pll.png')
 plt.close(fig)

@@ -18,10 +18,12 @@ window_2 = 60
 
 # rolling_window = max(window_1, window_2)
 rolling_window = 100
-bollinger_window = 100
-bollinger_window = min(bollinger_window, rolling_window)
 
-max_cash_limit = 500
+bollinger_window = 20
+bollinger_window = min(bollinger_window, rolling_window)
+bollinger_margin = 2
+
+max_cash_limit = 2_000
 
 zscore_action_threshold = 2
 zscore_spread_threshold = 1.5
@@ -47,27 +49,29 @@ def compute_zscore(spread: pd.Series):
     return (spread - spread.mean()) / spread.std()
 
 def bollinger_bands(zscores: pd.Series):
-    z_ma = zscores.rolling(bollinger_window).mean()
-    z_std = zscores.rolling(bollinger_window).std()
-    upper_band = z_ma + 2 * z_std
-    lower_band = z_ma - 2 * z_std
+    # z_ma = zscores.rolling(bollinger_window).mean()
+    z_ma = zscores.ewm(span=bollinger_window, adjust=False).mean()
+    # z_std = zscores.rolling(bollinger_window).std()
+    z_std = zscores.ewm(span=bollinger_window, adjust=False).std()
+    lower_band = z_ma - bollinger_margin * z_std
+    upper_band = z_ma + bollinger_margin * z_std
     return lower_band.iloc[-1], upper_band.iloc[-1]
 
 def find_cointegrated_pairs(df: pd.DataFrame):
     nInst = df.shape[1]
     score_matrix = np.zeros((nInst, nInst))
-    beta_matrix = np.zeros((nInst, nInst))
+    beta_matrix = np.ones((nInst, nInst))
     pvalue_matrix = np.ones((nInst, nInst))
 
     pairs_combi = combinations(df.columns, 2)
 
     pairs = []
     for S1, S2 in pairs_combi:
-        # pvalue, score = coint_simple(S1, S2)
-        # score_matrix[s1, s2] = score
+        pvalue, score = coint_simple(df[S1], df[S2])
+        score_matrix[S1, S2] = score
 
-        pvalue, beta = coint_spread(df[S1], df[S2])
-        beta_matrix[S1, S2] = beta
+        # pvalue, beta = coint_spread(df[S1], df[S2])
+        # beta_matrix[S1, S2] = beta
 
         pvalue_matrix[S1, S2] = pvalue
         if pvalue < 0.05:
@@ -75,7 +79,7 @@ def find_cointegrated_pairs(df: pd.DataFrame):
 
     return pairs, score_matrix, beta_matrix
 
-def trade(S1: pd.Series, S2: pd.Series, beta: np.float64):
+def trade(S1: pd.Series, S2: pd.Series, beta: np.float64 = 1):
     # if window1 == 0 or window2 == 0:
     #     return 0, 0, 0  # Return neutral positions if windows are incorrectly set.
 
@@ -99,7 +103,7 @@ def trade(S1: pd.Series, S2: pd.Series, beta: np.float64):
 
     # Bollinger band on current z-score
     lower_band, upper_band = bollinger_bands(zscores)
-    print(f"{lower_band:.2f}, {upper_band:.2f}")
+    # print(f"{lower_band:.2f}, {upper_band:.2f}")
 
     # Latest price
     latest_price_s1 = S1.iloc[-1]
@@ -115,11 +119,11 @@ def trade(S1: pd.Series, S2: pd.Series, beta: np.float64):
 
     # Determine positions based on bollinger bands
     if zscore >= upper_band:            # Spread is too large, S1 > S2 == short S1, long S2
-        countS1 = int(max_pos_S1)
-        countS2 = -int(max_pos_S2)
-    elif zscore <= lower_band:          # Spread is too small, S1 < S2 == long S1, short S2
         countS1 = -int(max_pos_S1)
         countS2 = int(max_pos_S2)
+    elif zscore <= lower_band:          # Spread is too small, S1 < S2 == long S1, short S2
+        countS1 = int(max_pos_S1)
+        countS2 = -int(max_pos_S2)
 
     # elif np.abs(zscore) <= zscore_neutral_threshold:    # Neutral zone, halve positions
     #     countS1 = min(countS1 / 2, max_pos_S1)
@@ -140,9 +144,9 @@ def getMyPosition(prcSoFar):
         pairs_cache, _, beta_matrix = find_cointegrated_pairs(data)
         print(len(pairs_cache))
 
-    # for (stock_1, stock_2) in pairs_cache:
+    for (stock_1, stock_2) in pairs_cache:
     # for (stock_1, stock_2) in [pairs_cache[5]]:
-    for (stock_1, stock_2) in [(0, 1)]:
+    # for (stock_1, stock_2) in [(0, 1)]:
         # print(stock_1, stock_2)
         S1, S2 = data[stock_1].iloc[-rolling_window:], data[stock_2].iloc[-rolling_window:]
         currentPos[stock_1], currentPos[stock_2], zscore, lower_band, upper_band = trade(S1, S2, beta_matrix[stock_1, stock_2])

@@ -21,7 +21,7 @@ rolling_window = 100
 
 bollinger_window = 20
 bollinger_window = min(bollinger_window, rolling_window)
-bollinger_margin = 2
+bollinger_margin = 1.5
 
 max_cash_limit = 2_000
 
@@ -67,11 +67,11 @@ def find_cointegrated_pairs(df: pd.DataFrame):
 
     pairs = []
     for S1, S2 in pairs_combi:
-        pvalue, score = coint_simple(df[S1], df[S2])
-        score_matrix[S1, S2] = score
+        # pvalue, score = coint_simple(df[S1], df[S2])
+        # score_matrix[S1, S2] = score
 
-        # pvalue, beta = coint_spread(df[S1], df[S2])
-        # beta_matrix[S1, S2] = beta
+        pvalue, beta = coint_spread(df[S1], df[S2])
+        beta_matrix[S1, S2] = beta
 
         pvalue_matrix[S1, S2] = pvalue
         if pvalue < 0.05:
@@ -144,8 +144,8 @@ def getMyPosition(prcSoFar):
         pairs_cache, _, beta_matrix = find_cointegrated_pairs(data)
         print(len(pairs_cache))
 
-    for (stock_1, stock_2) in pairs_cache:
-    # for (stock_1, stock_2) in [pairs_cache[5]]:
+    # for (stock_1, stock_2) in pairs_cache:
+    for (stock_1, stock_2) in [pairs_cache[5]]:
     # for (stock_1, stock_2) in [(0, 1)]:
         # print(stock_1, stock_2)
         S1, S2 = data[stock_1].iloc[-rolling_window:], data[stock_2].iloc[-rolling_window:]

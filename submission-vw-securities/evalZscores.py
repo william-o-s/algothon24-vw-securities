@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from mlr import getMyPosition as getPosition
+from pairs_trading import getMyPosition as getPosition
 
 nInst = 0
 nt = 0
@@ -30,10 +31,18 @@ def calcPL(prcHist):
     totDVolumeRandom = 0
     value = 0
     todayPLL = []
+    zscores = []
+    lower_bands = []
+    upper_bands = []
     (_, nt) = prcHist.shape
-    for t in range(500, 751):
+    for t in range(500, 751):   # can change to 500 to reflect current
         prcHistSoFar = prcHist[:, :t]
-        newPosOrig = getPosition(prcHistSoFar)
+        newPosOrig, zscore, lower_band, upper_band = getPosition(prcHistSoFar)
+
+        zscores.append(zscore)
+        lower_bands.append(lower_band)
+        upper_bands.append(upper_band)
+
         curPrices = prcHistSoFar[:, -1]
         posLimits = np.array([int(x) for x in dlrPosLimit / curPrices])
         newPos = np.clip(newPosOrig, -posLimits, posLimits)
@@ -54,14 +63,15 @@ def calcPL(prcHist):
         print("Day %d value: %.2lf todayPL: $%.2lf $-traded: %.0lf return: %.5lf" %
               (t, value, todayPL, totDVolume, ret))
     pll = np.array(todayPLL)
+    zscores = np.array(zscores)
     (plmu, plstd) = (np.mean(pll), np.std(pll))
     annSharpe = 0.0
     if (plstd > 0):
         annSharpe = np.sqrt(250) * plmu / plstd
-    return (plmu, ret, plstd, annSharpe, totDVolume)
+    return (pll, zscores, lower_bands, upper_bands, plmu, ret, plstd, annSharpe, totDVolume)
 
 
-(meanpl, ret, plstd, sharpe, dvol) = calcPL(prcAll)
+(pll, zscores, lower_bands, upper_bands, meanpl, ret, plstd, sharpe, dvol) = calcPL(prcAll)
 score = meanpl - 0.1*plstd
 print("=====")
 print("mean(PL): %.1lf" % meanpl)
@@ -70,3 +80,35 @@ print("StdDev(PL): %.2lf" % plstd)
 print("annSharpe(PL): %.2lf " % sharpe)
 print("totDvolume: %.0lf " % dvol)
 print("Score: %.2lf" % score)
+
+window = 250
+
+pll = pll[:window]
+zscores = zscores[:window]
+lower_bands = lower_bands[:window]
+upper_bands = upper_bands[:window]
+
+# Plot pll
+fig, ax1 = plt.subplots(figsize=(20,5))
+ax1.plot(pll, label='$')
+ax1.axhline(meanpl, color='black', label='P&L mean')
+ax2 = ax1.twinx()
+ax2.plot(zscores, label='Z', color='red')
+ax2.plot(lower_bands, label='Lower Bollinger', color='orange', linestyle='--')
+ax2.plot(upper_bands, label='Upper Bollinger', color='violet', linestyle='--')
+plt.title('Daily P&L')
+plt.legend(fancybox=True, framealpha=0.5)
+plt.savefig('daily pll.png')
+plt.close(fig)
+
+# Plot cumulative pll
+fig, ax1 = plt.subplots(figsize=(20,5))
+ax1.plot(np.cumsum(pll))
+ax2 = ax1.twinx()
+ax2.plot(zscores, label='Z', color='red')
+ax2.plot(lower_bands, label='Lower Bollinger', color='orange', linestyle='--')
+ax2.plot(upper_bands, label='Upper Bollinger', color='violet', linestyle='--')
+plt.ylabel('$')
+plt.title('Cumulative P&L')
+plt.savefig('cumulative pll.png')
+plt.close(fig)

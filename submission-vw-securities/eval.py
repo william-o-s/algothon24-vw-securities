@@ -2,11 +2,12 @@
 
 import numpy as np
 import pandas as pd
-from mlr import getMyPosition as getPosition
+from pairs_trading import getMyPosition as getPosition
 
 nInst = 0
 nt = 0
-commRate = 0.0010
+# commRate = 0.0010
+commRate = 0.0
 dlrPosLimit = 10000
 
 

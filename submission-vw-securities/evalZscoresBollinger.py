@@ -3,7 +3,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from pairs_trading import getMyPosition as getPosition
+from pairs_trading_log_returns import getMyPosition as getPosition
 
 nInst = 0
 nt = 0
@@ -95,7 +95,7 @@ print("Score: %.2lf" % score)
 
 # Toggle
 window_start = 0
-window_end = 50
+window_end = 250
 
 window_end += 1     # Include window end date
 plot_window_index = np.arange(500+window_start, 500+window_end, 1)

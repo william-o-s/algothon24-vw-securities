@@ -37,7 +37,7 @@ for (S1, S2) in [(0,2)]:
         value = 0
         todayPLL = []
         (_, nt) = prcHist.shape
-        for t in range(700, 751):
+        for t in range(500, 751):
             prcHistSoFar = prcHist[:, :t]
             newPosOrig = getPosition(prcHistSoFar, S1, S2, reset)
             curPrices = prcHistSoFar[:, -1]

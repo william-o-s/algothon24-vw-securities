@@ -196,8 +196,8 @@ def getMyPosition(prcSoFar):
         pairs_cache, _, beta_matrix = find_cointegrated_pairs(data)
         print(len(pairs_cache))
 
-    # for (stock_1, stock_2) in pairs_cache:
-    for (stock_1, stock_2) in [pairs_cache[5]]:
+    for (stock_1, stock_2) in pairs_cache:
+    # for (stock_1, stock_2) in [pairs_cache[5]]:
     # for (stock_1, stock_2) in [(0, 1)]:
         # print(stock_1, stock_2)
         S1, S2 = data[stock_1].iloc[-rolling_window:], data[stock_2].iloc[-rolling_window:]
